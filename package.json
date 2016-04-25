@@ -1,0 +1,22 @@
+{
+  "name": "elm-web-workers",
+  "version": "0.0.1",
+  "description": "Write Elm code that talks to Web Workers.",
+  "main": "src/js/supervisor.js",
+  "directories": {
+    "example": "example"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rtfeldman/elm-web-workers.git"
+  },
+  "author": "Richard Feldman <richard.t.feldman@gmail.com>",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/rtfeldman/elm-web-workers/issues"
+  },
+  "homepage": "https://github.com/rtfeldman/elm-web-workers#readme"
+}
