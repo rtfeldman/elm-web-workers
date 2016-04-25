@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/rtfeldman/elm-web-workers/issues"
   },
-  "homepage": "https://github.com/rtfeldman/elm-web-workers#readme"
+  "homepage": "https://github.com/rtfeldman/elm-web-workers#readme",
+  "optionalDependencies": {
+    "webworker-threads": "^0.7.2"
+  }
 }
