@@ -1,6 +1,10 @@
 var Worker = typeof Worker === "undefined" ? require("webworker-threads").Worker : Worker;
 
-function Supervisor(workerPath, elmPath, elmModuleName, args, sendMessagePortName, receiveMessagePortName) {
+function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMessagePortName, workerPath) {
+  if (typeof workerPath === "undefined") {
+    workerPath = (require && require.resolve) ? require.resolve("./worker.js") : "worker.js";
+  }
+
   if (typeof args === "undefined") {
     args = {};
   }
