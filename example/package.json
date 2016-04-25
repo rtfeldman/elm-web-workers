@@ -9,6 +9,6 @@
   "author": "Richard Feldman<richard.t.feldman@gmail.com>",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "elm-node-app": "file:.."
+    "elm-web-workers": "file:.."
   }
 }
