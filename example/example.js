@@ -25,6 +25,8 @@ supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 
+console.log("This is a prompt. Type stuff in and I'll echo it!")
+
 process.stdin.resume();
 process.stdin.setEncoding('utf8');
 

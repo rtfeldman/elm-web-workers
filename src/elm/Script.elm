@@ -45,14 +45,11 @@ type ScriptCmd
     | None
 
 
-
---program : ParallelProgram workerModel supervisorModel -> Program Never
-
-
+program : ParallelProgram workerModel supervisorModel -> Program Never
 program config =
     let
-        --handleMessage : Value -> ( Role workerModel supervisorModel, ScriptCmd ) -> ( Role workerModel supervisorModel, ScriptCmd )
-        handleMessage msg ( role, _ ) =
+        --handleMessage : Value -> Role workerModel -> Role workerModel supervisorModel
+        handleMessage msg role =
             case ( role, Decode.decodeValue messageDecoder msg ) of
                 ( _, Err err ) ->
                     Debug.crash ("Malformed JSON received: " ++ err)
@@ -66,7 +63,7 @@ program config =
                         ( workerModel, _ ) =
                             config.worker.init
                     in
-                        case handleMessage msg ( (Supervisor workerModel model), None ) of
+                        case handleMessage msg (Supervisor workerModel model) of
                             ( newRole, SupervisorCmd newCmd ) ->
                                 ( newRole, SupervisorCmd (Supervisor.batch [ cmd, newCmd ]) )
 
@@ -85,7 +82,7 @@ program config =
                         ( supervisorModel, _ ) =
                             config.supervisor.init
                     in
-                        case handleMessage msg ( (Worker model supervisorModel), None ) of
+                        case handleMessage msg (Worker model supervisorModel) of
                             ( newRole, WorkerCmd newCmd ) ->
                                 ( newRole, WorkerCmd (Worker.batch [ cmd, newCmd ]) )
 
@@ -120,32 +117,42 @@ program config =
                         ( Worker newModel supervisorModel, WorkerCmd cmd )
 
                 ( Worker _ _, Ok ( True, Just _, data ) ) ->
-                    Debug.crash ("Received workerId message intended for a worker.")
+                    Debug.crash "Received workerId message intended for a worker."
 
                 ( Worker _ _, Ok ( False, _, _ ) ) ->
-                    Debug.crash ("Received supervisor message while running as worker.")
+                    Debug.crash "Received supervisor message while running as worker."
 
                 ( Supervisor _ _, Ok ( True, _, _ ) ) ->
-                    Debug.crash ("Received worker message while running as supervisor.")
+                    Debug.crash "Received worker message while running as supervisor."
+
+        update msg role =
+            let
+                ( role, scriptCmd ) =
+                    handleMessage msg role
+
+                cmd =
+                    scriptCmd
+                        |> cmdToMsg
+                        |> Maybe.map config.send
+                        |> Maybe.withDefault Cmd.none
+            in
+                ( role, cmd )
     in
-        --Signal.foldp handleMessage ( Uninitialized, None ) config.receiveMessage
-        --    |> Signal.filterMap (snd >> cmdToMsg)
-        --        Encode.null
         Html.App.program
-            { init = ( ( Uninitialized, None ), Cmd.none )
+            { init = ( Uninitialized, Cmd.none )
             , view = wrapView config.supervisor.view >> Maybe.withDefault (Html.text "")
-            , update = handleMessage
+            , update = update
             , subscriptions =
-                wrapSubscriptions config.message
+                wrapSubscriptions config.receive
                     config.worker.subscriptions
                     config.supervisor.subscriptions
             }
 
 
-wrapView : (supervisorModel -> Html Value) -> ( Role workerModel supervisorModel, ScriptCmd ) -> Maybe (Html Value)
-wrapView view ( role, _ ) =
+wrapView : (supervisorModel -> Html Value) -> Role workerModel supervisorModel -> Maybe (Html Value)
+wrapView view role =
     case role of
-        Supervisor workerModel supervisorModel ->
+        Supervisor _ supervisorModel ->
             Just (view supervisorModel)
 
         Worker workerModel supervisorModel ->
@@ -157,20 +164,17 @@ wrapView view ( role, _ ) =
             Nothing
 
 
-
---wrapSubscriptions : Sub Value -> (workerModel -> Sub Value) -> (supervisorModel -> Sub Value) -> ( Role workerModel supervisorModel, ScriptCmd ) -> Sub Value
-
-
-wrapSubscriptions receiveMessage workerSubscriptions supervisorSubscriptions ( role, _ ) =
+wrapSubscriptions : Sub Value -> (workerModel -> Sub Value) -> (supervisorModel -> Sub Value) -> Role workerModel supervisorModel -> Sub Value
+wrapSubscriptions receive workerSubscriptions supervisorSubscriptions role =
     case role of
         Supervisor _ supervisorModel ->
-            Sub.batch [ receiveMessage, supervisorSubscriptions supervisorModel ]
+            Sub.batch [ receive, supervisorSubscriptions supervisorModel ]
 
         Worker workerModel _ ->
-            Sub.batch [ receiveMessage, workerSubscriptions workerModel ]
+            Sub.batch [ receive, workerSubscriptions workerModel ]
 
         Uninitialized ->
-            receiveMessage
+            receive
 
 
 cmdToMsg : ScriptCmd -> Maybe Value

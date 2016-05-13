@@ -1,4 +1,4 @@
-module Example exposing (..)
+port module Example exposing (..)
 
 -- This is where the magic happens
 
@@ -10,7 +10,6 @@ import Script.Supervisor as Supervisor exposing (WorkerId, SupervisorMsg(..))
 import Script.Worker as Worker
 import String
 import Html
-import Html.App
 
 
 type alias WorkerModel =
@@ -73,9 +72,6 @@ updateSupervisor supervisorMsg model =
                     ( model, Supervisor.emit (Encode.string ("Error decoding message; error was: " ++ err)) )
 
 
-port sendMessage : Value -> Cmd msg
-
-
 main : Program Never
 main =
     Script.program
@@ -90,9 +86,12 @@ main =
             , subscriptions = \_ -> Sub.none
             , view = \_ -> Html.text "Running..."
             }
-        , receive = receiveMessage identity
-        , send = sendMessge
+        , receive = receive identity
+        , send = send
         }
 
 
-port receiveMessage : (Value -> msg) -> Sub msg
+port send : Value -> Cmd msg
+
+
+port receive : (Value -> msg) -> Sub msg
