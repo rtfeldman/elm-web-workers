@@ -1,4 +1,4 @@
-module Script.Worker (Cmd, send, batch, none, encodeCmd) where
+module Script.Worker exposing (Cmd, send, batch, none, encodeCmd)
 
 import Json.Encode as Encode exposing (Value)
 
@@ -6,38 +6,38 @@ import Json.Encode as Encode exposing (Value)
 {-| A command the worker can run.
 -}
 type Cmd
-  = Send Value
-  | Batch (List Cmd)
+    = Send Value
+    | Batch (List Cmd)
 
 
 {-| Serialize a `Cmd` into a list of `Json.Value` instances.
 -}
 encodeCmd : Cmd -> List Value
 encodeCmd cmd =
-  case cmd of
-    Send data ->
-      [ data ]
+    case cmd of
+        Send data ->
+            [ data ]
 
-    Batch cmds ->
-      List.concatMap encodeCmd cmds
+        Batch cmds ->
+            List.concatMap encodeCmd cmds
 
 
 {-| Send a `Json.Value` to the supervisor.
 -}
 send : Value -> Cmd
 send =
-  Send
+    Send
 
 
 {-| Combine several worker commands.
 -}
 batch : List Cmd -> Cmd
 batch =
-  Batch
+    Batch
 
 
 {-| Do nothing.
 -}
 none : Cmd
 none =
-  batch []
+    batch []
