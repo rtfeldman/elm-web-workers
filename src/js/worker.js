@@ -23,8 +23,14 @@ self.onmessage = function(event) {
           try {
             importScripts(config.elmPath);
 
-            Elm = typeof Elm === "undefined" ? module.exports : Elm;
-            elmApp = Elm.worker(Elm[config.elmModuleName], config.args);
+            elmApp =
+                Elm[config.elmModuleName].worker()
+
+            // elmApp =
+            //   typeof config.args === "undefined"
+            //     ? Elm[config.elmModuleName].worker()
+            //     : Elm[config.elmModuleName].worker(config.args);
+
           } catch(err) {
             sendError("Error initializing Elm in worker: " + err);
           }

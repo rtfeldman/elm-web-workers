@@ -5,22 +5,24 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
     workerPath = (require && require.resolve) ? require.resolve("./worker.js") : "worker.js";
   }
 
-  if (typeof args === "undefined") {
-    args = {};
-  }
-
   var Elm = typeof Elm === "undefined" ? require(elmPath) : Elm;
 
-  var elmApp = Elm.worker(Elm[elmModuleName], args);
+  var elmApp =
+      Elm[elmModuleName].worker()
+
+  // var elmApp =
+  //   typeof args === "undefined"
+  //     ? Elm[elmModuleName].worker()
+  //     : Elm[elmModuleName].worker(args);
 
   if (typeof sendMessagePortName === "undefined") {
-    sendMessagePortName = "sendMessage";
+    sendMessagePortName = "send";
   } else if (typeof sendMessagePortName !== "string") {
     throw new Error("Invalid sendMessagePortName: " + sendMessagePortName);
   }
 
   if (typeof receiveMessagePortName === "undefined") {
-    receiveMessagePortName = "receiveMessage";
+    receiveMessagePortName = "receive";
   } else if (typeof receiveMessagePortName !== "string") {
     throw new Error("Invalid receiveMessagePortName: " + receiveMessagePortName);
   }
