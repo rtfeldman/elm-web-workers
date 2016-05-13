@@ -1,6 +1,7 @@
 module Example exposing (..)
 
-import Signal exposing (Signal)
+-- This is where the magic happens
+
 import Json.Encode as Encode exposing (Value)
 import Json.Decode as Decode exposing ((:=))
 import Script
@@ -8,6 +9,8 @@ import Set exposing (Set)
 import Script.Supervisor as Supervisor exposing (WorkerId, SupervisorMsg(..))
 import Script.Worker as Worker
 import String
+import Html
+import Html.App
 
 
 type alias WorkerModel =
@@ -24,10 +27,14 @@ updateWorker : Value -> WorkerModel -> ( WorkerModel, Worker.Cmd )
 updateWorker data model =
     case Decode.decodeValue Decode.string data of
         Ok id ->
-            ( { model | id = id }, Worker.send (Encode.string ("Hi, my name is Worker " ++ id ++ "!")) )
+            ( { model | id = id }
+            , Worker.send (Encode.string ("Hi, my name is Worker " ++ id ++ "!"))
+            )
 
         Err err ->
-            ( model, Worker.send (Encode.string ("Error on worker " ++ model.id ++ ": " ++ err)) )
+            ( model
+            , Worker.send (Encode.string ("Error on worker " ++ model.id ++ ": " ++ err))
+            )
 
 
 updateSupervisor : SupervisorMsg -> SupervisorModel -> ( SupervisorModel, Supervisor.Cmd )
@@ -66,19 +73,26 @@ updateSupervisor supervisorMsg model =
                     ( model, Supervisor.emit (Encode.string ("Error decoding message; error was: " ++ err)) )
 
 
-port sendMessage : Signal Value
-port sendMessage =
-    Script.start
+port sendMessage : Value -> Cmd msg
+
+
+main : Program Never
+main =
+    Script.program
         { worker =
             { update = updateWorker
             , init = ( (WorkerModel "0"), Worker.none )
+            , subscriptions = \_ -> Sub.none
             }
         , supervisor =
             { update = updateSupervisor
             , init = ( (SupervisorModel [] Set.empty), Supervisor.none )
+            , subscriptions = \_ -> Sub.none
+            , view = \_ -> Html.text "Running..."
             }
-        , receiveMessage = receiveMessage
+        , receive = receiveMessage identity
+        , send = sendMessge
         }
 
 
-port receiveMessage : Signal Value
+port receiveMessage : (Value -> msg) -> Sub msg

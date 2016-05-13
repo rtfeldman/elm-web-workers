@@ -1,16 +1,16 @@
 {
     "version": "1.0.0",
     "summary": "elm-node-app example",
-    "repository": "https://github.com/rtfeldman/elm-node-app.git",
-    "license": "BSD3",
+    "repository": "https://github.com/rtfeldman/elm-web-workers.git",
+    "license": "BSD-3-Clause",
     "source-directories": [
         ".",
         "../src/elm"
     ],
     "exposed-modules": [],
     "dependencies": {
-        "circuithub/elm-json-extra": "2.2.1 <= v < 3.0.0",
-        "elm-lang/core": "3.0.0 <= v < 4.0.0"
+        "elm-community/elm-json-extra": "1.0.0 <= v < 2.0.0",
+        "elm-lang/core": "4.0.0 <= v < 5.0.0"
     },
-    "elm-version": "0.16.0 <= v < 0.17.0"
+    "elm-version": "0.17.0 <= v < 0.18.0"
 }

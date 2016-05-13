@@ -1,23 +1,30 @@
 module Script exposing (..)
 
-import Signal exposing (Signal)
+-- This is where the magic happens
+
 import Json.Decode as Decode exposing (Value, Decoder, (:=), decodeValue)
 import Json.Decode.Extra as Extra
 import Json.Encode as Encode
 import Script.Worker as Worker
 import Script.Supervisor as Supervisor exposing (WorkerId, SupervisorMsg(..))
+import Html.App
+import Html exposing (Html)
 
 
-type alias Distribute workerModel supervisorModel =
+type alias ParallelProgram workerModel supervisorModel =
     { worker :
         { update : Value -> workerModel -> ( workerModel, Worker.Cmd )
         , init : ( workerModel, Worker.Cmd )
+        , subscriptions : workerModel -> Sub Value
         }
     , supervisor :
         { update : SupervisorMsg -> supervisorModel -> ( supervisorModel, Supervisor.Cmd )
         , init : ( supervisorModel, Supervisor.Cmd )
+        , subscriptions : supervisorModel -> Sub Value
+        , view : supervisorModel -> Html Value
         }
-    , receiveMessage : Signal Value
+    , receive : Sub Value
+    , send : Value -> Cmd Value
     }
 
 
@@ -32,16 +39,19 @@ type Role workerModel supervisorModel
     | Uninitialized
 
 
-type Cmd
+type ScriptCmd
     = SupervisorCmd Supervisor.Cmd
     | WorkerCmd Worker.Cmd
     | None
 
 
-start : Distribute workerModel supervisorModel -> Signal Value
-start config =
+
+--program : ParallelProgram workerModel supervisorModel -> Program Never
+
+
+program config =
     let
-        --handleMessage : Value -> ( Role workerModel supervisorModel, Cmd ) -> ( Role workerModel supervisorModel, Cmd )
+        --handleMessage : Value -> ( Role workerModel supervisorModel, ScriptCmd ) -> ( Role workerModel supervisorModel, ScriptCmd )
         handleMessage msg ( role, _ ) =
             case ( role, Decode.decodeValue messageDecoder msg ) of
                 ( _, Err err ) ->
@@ -118,11 +128,52 @@ start config =
                 ( Supervisor _ _, Ok ( True, _, _ ) ) ->
                     Debug.crash ("Received worker message while running as supervisor.")
     in
-        Signal.foldp handleMessage ( Uninitialized, None ) config.receiveMessage
-            |> Signal.filterMap (snd >> cmdToMsg) Encode.null
+        --Signal.foldp handleMessage ( Uninitialized, None ) config.receiveMessage
+        --    |> Signal.filterMap (snd >> cmdToMsg)
+        --        Encode.null
+        Html.App.program
+            { init = ( ( Uninitialized, None ), Cmd.none )
+            , view = wrapView config.supervisor.view >> Maybe.withDefault (Html.text "")
+            , update = handleMessage
+            , subscriptions =
+                wrapSubscriptions config.message
+                    config.worker.subscriptions
+                    config.supervisor.subscriptions
+            }
 
 
-cmdToMsg : Cmd -> Maybe Value
+wrapView : (supervisorModel -> Html Value) -> ( Role workerModel supervisorModel, ScriptCmd ) -> Maybe (Html Value)
+wrapView view ( role, _ ) =
+    case role of
+        Supervisor workerModel supervisorModel ->
+            Just (view supervisorModel)
+
+        Worker workerModel supervisorModel ->
+            -- Workers can't have views
+            Nothing
+
+        Uninitialized ->
+            -- We don't get a view until we initialize
+            Nothing
+
+
+
+--wrapSubscriptions : Sub Value -> (workerModel -> Sub Value) -> (supervisorModel -> Sub Value) -> ( Role workerModel supervisorModel, ScriptCmd ) -> Sub Value
+
+
+wrapSubscriptions receiveMessage workerSubscriptions supervisorSubscriptions ( role, _ ) =
+    case role of
+        Supervisor _ supervisorModel ->
+            Sub.batch [ receiveMessage, supervisorSubscriptions supervisorModel ]
+
+        Worker workerModel _ ->
+            Sub.batch [ receiveMessage, workerSubscriptions workerModel ]
+
+        Uninitialized ->
+            receiveMessage
+
+
+cmdToMsg : ScriptCmd -> Maybe Value
 cmdToMsg rawCmd =
     case rawCmd of
         SupervisorCmd cmd ->

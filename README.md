@@ -17,7 +17,7 @@ Implementation notes:
 You can try out the example with:
 
 ```bash
-$ cd examples
+$ cd example
 $ npm install .. && npm run example
 ```
 
