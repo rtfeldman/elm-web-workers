@@ -39,17 +39,25 @@ type Role workerModel supervisorModel
     | Uninitialized
 
 
-type ScriptCmd
-    = SupervisorCmd Supervisor.Cmd
-    | WorkerCmd Worker.Cmd
-    | None
-
-
 program : ParallelProgram workerModel supervisorModel -> Program Never
 program config =
     let
-        --handleMessage : Value -> Role workerModel -> Role workerModel supervisorModel
-        handleMessage msg role =
+        supervisorCmd : Supervisor.Cmd -> Cmd Value
+        supervisorCmd cmd =
+            cmd
+                |> Supervisor.encodeCmd
+                |> Encode.list
+                |> config.send
+
+        workerCmd : Worker.Cmd -> Cmd Value
+        workerCmd cmd =
+            cmd
+                |> Worker.encodeCmd
+                |> Encode.list
+                |> config.send
+
+        --update : Value -> Role workerModel -> ( Role workerModel supervisorModel, Cmd Value )
+        update msg role =
             case ( role, Decode.decodeValue messageDecoder msg ) of
                 ( _, Err err ) ->
                     Debug.crash ("Malformed JSON received: " ++ err)
@@ -57,42 +65,32 @@ program config =
                 ( Uninitialized, Ok ( False, _, data ) ) ->
                     let
                         -- We've received a supervisor message; we must be a supervisor!
-                        ( model, cmd ) =
+                        ( supervisorModel, initCmd ) =
                             config.supervisor.init
 
                         ( workerModel, _ ) =
                             config.worker.init
+
+                        ( newRole, newCmd ) =
+                            update msg (Supervisor workerModel supervisorModel)
                     in
-                        case handleMessage msg (Supervisor workerModel model) of
-                            ( newRole, SupervisorCmd newCmd ) ->
-                                ( newRole, SupervisorCmd (Supervisor.batch [ cmd, newCmd ]) )
-
-                            ( _, WorkerCmd _ ) ->
-                                Debug.crash "On init, received a worker command instead of the expected supervisor command"
-
-                            ( _, None ) ->
-                                Debug.crash "On init, received a None command instead of the expected supervisor command"
+                        ( newRole, Cmd.batch [ supervisorCmd initCmd, newCmd ] )
 
                 ( Uninitialized, Ok ( True, _, data ) ) ->
                     let
                         -- We've received a worker message; we must be a worker!
-                        ( model, cmd ) =
+                        ( workerModel, initCmd ) =
                             config.worker.init
 
                         ( supervisorModel, _ ) =
                             config.supervisor.init
+
+                        ( newRole, newCmd ) =
+                            update msg (Worker workerModel supervisorModel)
                     in
-                        case handleMessage msg (Worker model supervisorModel) of
-                            ( newRole, WorkerCmd newCmd ) ->
-                                ( newRole, WorkerCmd (Worker.batch [ cmd, newCmd ]) )
+                        ( newRole, Cmd.batch [ workerCmd initCmd, newCmd ] )
 
-                            ( _, SupervisorCmd _ ) ->
-                                Debug.crash "On init, received a supervisor command instead of the expected worker command"
-
-                            ( _, None ) ->
-                                Debug.crash "On init, received a None command instead of the expected worker command"
-
-                ( Supervisor workerModel model, Ok ( False, maybeWorkerId, data ) ) ->
+                ( Supervisor workerModel supervisorModel, Ok ( False, maybeWorkerId, data ) ) ->
                     let
                         -- We're a supervisor; process the message accordingly
                         subMsg =
@@ -104,9 +102,9 @@ program config =
                                     FromWorker workerId data
 
                         ( newModel, cmd ) =
-                            config.supervisor.update subMsg model
+                            config.supervisor.update subMsg supervisorModel
                     in
-                        ( Supervisor workerModel newModel, SupervisorCmd cmd )
+                        ( Supervisor workerModel newModel, supervisorCmd cmd )
 
                 ( Worker model supervisorModel, Ok ( True, Nothing, data ) ) ->
                     let
@@ -114,7 +112,7 @@ program config =
                         ( newModel, cmd ) =
                             config.worker.update data model
                     in
-                        ( Worker newModel supervisorModel, WorkerCmd cmd )
+                        ( Worker newModel supervisorModel, workerCmd cmd )
 
                 ( Worker _ _, Ok ( True, Just _, data ) ) ->
                     Debug.crash "Received workerId message intended for a worker."
@@ -124,19 +122,6 @@ program config =
 
                 ( Supervisor _ _, Ok ( True, _, _ ) ) ->
                     Debug.crash "Received worker message while running as supervisor."
-
-        update msg role =
-            let
-                ( role, scriptCmd ) =
-                    handleMessage msg role
-
-                cmd =
-                    scriptCmd
-                        |> cmdToMsg
-                        |> Maybe.map config.send
-                        |> Maybe.withDefault Cmd.none
-            in
-                ( role, cmd )
     in
         Html.App.program
             { init = ( Uninitialized, Cmd.none )
@@ -175,22 +160,3 @@ wrapSubscriptions receive workerSubscriptions supervisorSubscriptions role =
 
         Uninitialized ->
             receive
-
-
-cmdToMsg : ScriptCmd -> Maybe Value
-cmdToMsg rawCmd =
-    case rawCmd of
-        SupervisorCmd cmd ->
-            cmd
-                |> Supervisor.encodeCmd
-                |> Encode.list
-                |> Just
-
-        WorkerCmd cmd ->
-            cmd
-                |> Worker.encodeCmd
-                |> Encode.list
-                |> Just
-
-        None ->
-            Nothing
