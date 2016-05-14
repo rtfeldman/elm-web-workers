@@ -1,6 +1,5 @@
 var Elm;
 var elmApp;
-var sendMessagePortName;
 var receiveMessagePortName;
 
 module = typeof module === "undefined" ? {} : module;
