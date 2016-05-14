@@ -1,4 +1,4 @@
-var Supervisor = require("elm-web-workers").Supervisor;
+var Supervisor = require("elm-web-workers");
 var path = require("path");
 var elmPath = path.join(__dirname, "Elm.js");
 

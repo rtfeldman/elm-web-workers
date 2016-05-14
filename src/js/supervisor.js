@@ -198,4 +198,6 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
   });
 }
 
-module.exports.Supervisor = Supervisor;
+if (typeof module === "object") {
+  module.exports = Supervisor;
+}
