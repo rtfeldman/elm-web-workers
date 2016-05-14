@@ -42,15 +42,15 @@ type Role workerModel supervisorModel
 program : ParallelProgram workerModel supervisorModel -> Program Never
 program config =
     let
-        supervisorCmd : Supervisor.Cmd -> Cmd Value
-        supervisorCmd cmd =
+        sendToSupervisor : Supervisor.Cmd -> Cmd Value
+        sendToSupervisor cmd =
             cmd
                 |> Supervisor.encodeCmd
                 |> Encode.list
                 |> config.send
 
-        workerCmd : Worker.Cmd -> Cmd Value
-        workerCmd cmd =
+        sendToWorker : Worker.Cmd -> Cmd Value
+        sendToWorker cmd =
             cmd
                 |> Worker.encodeCmd
                 |> Encode.list
@@ -74,7 +74,7 @@ program config =
                         ( newRole, newCmd ) =
                             update msg (Supervisor workerModel supervisorModel)
                     in
-                        ( newRole, Cmd.batch [ supervisorCmd initCmd, newCmd ] )
+                        ( newRole, Cmd.batch [ sendToSupervisor initCmd, newCmd ] )
 
                 ( Uninitialized, Ok ( True, _, data ) ) ->
                     let
@@ -88,7 +88,7 @@ program config =
                         ( newRole, newCmd ) =
                             update msg (Worker workerModel supervisorModel)
                     in
-                        ( newRole, Cmd.batch [ workerCmd initCmd, newCmd ] )
+                        ( newRole, Cmd.batch [ sendToWorker initCmd, newCmd ] )
 
                 ( Supervisor workerModel supervisorModel, Ok ( False, maybeWorkerId, data ) ) ->
                     let
@@ -104,18 +104,18 @@ program config =
                         ( newModel, cmd ) =
                             config.supervisor.update subMsg supervisorModel
                     in
-                        ( Supervisor workerModel newModel, supervisorCmd cmd )
+                        ( Supervisor workerModel newModel, sendToSupervisor cmd )
 
-                ( Worker model supervisorModel, Ok ( True, Nothing, data ) ) ->
+                ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
                     let
                         -- We're a worker; process the message accordingly
                         ( newModel, cmd ) =
-                            config.worker.update data model
+                            config.worker.update data workerModel
                     in
-                        ( Worker newModel supervisorModel, workerCmd cmd )
+                        ( Worker newModel supervisorModel, sendToWorker cmd )
 
                 ( Worker _ _, Ok ( True, Just _, data ) ) ->
-                    Debug.crash "Received workerId message intended for a worker."
+                    Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
 
                 ( Worker _ _, Ok ( False, _, _ ) ) ->
                     Debug.crash "Received supervisor message while running as worker."

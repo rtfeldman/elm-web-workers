@@ -36,6 +36,12 @@ process.stdin.on("data", function (text) {
   var val = util.inspect(text);
 
   supervisor.send({msgType: "echo", data: val});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
+  supervisor.send({msgType: "spawn", data: "" + Math.random()});
 
   if (text === "quit\n") {
     done();
