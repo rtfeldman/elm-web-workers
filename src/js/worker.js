@@ -1,5 +1,5 @@
-var Elm;
-var elmApp;
+console.log("I AM A WORKER");
+
 var receiveMessagePortName;
 
 module = typeof module === "undefined" ? {} : module;
