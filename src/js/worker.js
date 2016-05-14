@@ -12,7 +12,6 @@ function sendMessage(message) {
 
 self.onmessage = function(event) {
   var msg = event.data;
-  console.log("worker got a msg");
 
   switch (msg.cmd) {
     case "INIT_WORKER":
@@ -28,30 +27,30 @@ self.onmessage = function(event) {
 
           elmApp = Elm[config.elmModuleName].worker(config.args);
 
-          elmApp.ports[config.sendMessagePortName].subscribe(sendMessages);
+          elmApp.ports[config.sendMessagePortName].subscribe(sendMessage);
         } catch(err) {
-          sendError("Error initializing Elm in worker: " + err);
+          throw new Error("Error initializing Elm in worker: " + err);
         }
       } else {
-        sendError("Worker attempted to initialize twice!");
+        throw new Error("Worker attempted to initialize twice!");
       }
 
       break;
 
     case "SEND_TO_WORKER":
       if (typeof elmApp === "undefined") {
-        sendError("Canot send() to a worker that has not yet been initialized!");
+        throw new Error("Canot send() to a worker that has not yet been initialized!");
       }
 
       try {
         elmApp.ports[receiveMessagePortName].send({forWorker: true, workerId: null, data: msg.data});
       } catch (err) {
-        sendError("Error attempting to send message to Elm Worker: " + err);
+        throw new Error("Error attempting to send message to Elm Worker: " + err);
       }
 
       break;
 
     default:
-      sendError("Unrecognized worker command: " + msg.cmd);
+      throw new Error("Unrecognized worker command: " + msg.cmd);
   }
 };
