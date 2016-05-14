@@ -8,7 +8,7 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
   var Elm = typeof Elm === "undefined" ? require(elmPath) : Elm;
 
   var elmApp =
-      Elm[elmModuleName].worker()
+    Elm[elmModuleName].worker()
 
   // var elmApp =
   //   typeof args === "undefined"
@@ -68,6 +68,7 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
   }
 
   var started = false; // CAUTION: this gets mutated!
+  var sendQueue = []; // CAUTION: this gets mutated!
 
   this.start = function() {
     if (started) {
@@ -76,15 +77,31 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
       var workerConfig = JSON.stringify({
         elmPath: elmPath,
         elmModuleName: elmModuleName,
+        receiveMessagePortName: receiveMessagePortName,
+        sendMessagePortName: sendMessagePortName,
         args: args
       });
 
       supervise(subscribe, send, emit, workerPath, workerConfig);
     }
+
+    // Clear out the send queue.
+    // NOTE: we must wrap this in a setTimeout, as sending immediately after
+    // calling start() drops the messages on Node.js for some as-yet unknown reason.
+    setTimeout(function() {
+      sendQueue.forEach(function(thunk) { thunk() });
+
+      sendQueue = undefined;
+    }, 0);
   }
 
   this.send = function(data) {
-    return send({forWorker: false, workerId: null, data: data});
+    if (typeof sendQueue === "undefined") {
+      return send({forWorker: false, workerId: null, data: data});
+    } else {
+      // If we haven't started yet, enqueue the messages for sending later.
+      sendQueue.push(function() { send({forWorker: false, workerId: null, data: data}); });
+    }
   }
 
   this.Elm = Elm;
@@ -128,10 +145,11 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
 
           return emitClose("Error: Cannot send message " + msg + " to workerId `" + workerId + "`!");
         } else {
-          // CAUTION: this may get mutated!
-          var messages = [{cmd: "SEND_TO_WORKER", data: msg.data}];
+          var message = {cmd: "SEND_TO_WORKER", data: msg.data};
 
-          if (!workers.hasOwnProperty(workerId)) {
+          if (workers.hasOwnProperty(workerId)) {
+            return workers[workerId].postMessage(message);
+          } else {
             // This workerId is unknown to us; init a new worker before sending.
             var worker = new Worker(workerPath);
 
@@ -159,13 +177,16 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
               }
             };
 
-            messages.unshift({cmd: "INIT_WORKER", data: workerConfig});
-
             // Record this new worker in the lookup table.
             workers[workerId] = worker;
-          }
 
-          return workers[workerId].postMessage(messages);
+            worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
+
+            // Give the worker a tick to initialize before posting the message.
+            return setTimeout(function() {
+              worker.postMessage(message);
+            }, 0);
+          }
         }
 
       default:
