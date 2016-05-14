@@ -178,11 +178,13 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
             // Record this new worker in the lookup table.
             workers[workerId] = worker;
 
-            worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
-
             // Give the worker a tick to initialize before posting the message.
             return setTimeout(function() {
-              worker.postMessage(message);
+              worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
+
+              return setTimeout(function() {
+                worker.postMessage(message);
+              });
             }, 0);
           }
         }
