@@ -1,9 +1,10 @@
-var module = typeof module === "undefined" ? {} : module;
-var setTimeout = typeof setTimeout === "undefined" ? function(callback) { return callback() } : setTimeout;
 var Elm;
 var elmApp;
 var sendMessagePortName;
 var receiveMessagePortName;
+
+module = typeof module === "undefined" ? {} : module;
+setTimeout = typeof setTimeout === "undefined" ? function(callback) { return callback() } : setTimeout;
 
 function sendError(err) {
   self.postMessage({cmd: "WORKER_ERROR", contents: err});
