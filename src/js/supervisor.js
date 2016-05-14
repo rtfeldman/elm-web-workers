@@ -163,11 +163,9 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
                   if (typeof contents === "undefined") {
                     return console.error("Received `undefined` as a message from worker[" + workerId + "]");
                   } else {
-                    contents.forEach(function(content) {
-                      // When the worker sends a message, tag it with this workerId
-                      // and then send it along for the supervisor to handle.
-                      return send({forWorker: false, workerId: workerId, data: content});
-                    });
+                    // When the worker sends a message, tag it with this workerId
+                    // and then send it along for the supervisor to handle.
+                    return send({forWorker: false, workerId: workerId, data: contents});
                   }
 
                 default:

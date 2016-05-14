@@ -9,8 +9,10 @@ function sendError(err) {
   self.postMessage({cmd: "WORKER_ERROR", contents: err});
 }
 
-function sendMessage(message) {
-  self.postMessage({cmd: "MESSAGE_FROM_WORKER", contents: message});
+function sendMessages(messages) {
+  messages.forEach(function(msg) {
+    self.postMessage({cmd: "MESSAGE_FROM_WORKER", contents: msg});
+  });
 }
 
 self.onmessage = function(event) {
@@ -30,7 +32,7 @@ self.onmessage = function(event) {
 
           elmApp = Elm[config.elmModuleName].worker(config.args);
 
-          elmApp.ports[config.sendMessagePortName].subscribe(sendMessage);
+          elmApp.ports[config.sendMessagePortName].subscribe(sendMessages);
         } catch(err) {
           sendError("Error initializing Elm in worker: " + err);
         }

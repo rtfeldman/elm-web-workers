@@ -60,6 +60,11 @@ updateSupervisor supervisorMsg model =
                     in
                         ( { model | messagesReceived = newMessagesReceived }, Supervisor.emit (Encode.string output) )
 
+                Ok ( "echoViaWorker", workerId ) ->
+                    ( model
+                    , Supervisor.send workerId (Encode.string ("I have " ++ toString model.workerIds ++ " workers"))
+                    )
+
                 Ok ( "spawn", workerId ) ->
                     ( { model | workerIds = Set.insert workerId model.workerIds }
                     , Supervisor.send workerId (Encode.string workerId)

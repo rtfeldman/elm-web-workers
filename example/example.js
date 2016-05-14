@@ -17,6 +17,7 @@ supervisor.start();
 
 supervisor.send({msgType: "echo", data: "Spawning some workers..."});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "5"});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
@@ -24,6 +25,11 @@ supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
+
+
+setInterval(function() {
+  supervisor.send({msgType: "echoViaWorker", data: "5"});
+}, 2000);
 
 console.log("This is a prompt. Type stuff in and I'll echo it!")
 
@@ -36,6 +42,7 @@ process.stdin.on("data", function (text) {
   var val = util.inspect(text);
 
   supervisor.send({msgType: "echo", data: val});
+  supervisor.send({msgType: "echoViaWorker", data: "5"});
   supervisor.send({msgType: "spawn", data: "" + Math.random()});
   supervisor.send({msgType: "spawn", data: "" + Math.random()});
   supervisor.send({msgType: "spawn", data: "" + Math.random()});
