@@ -45,7 +45,7 @@ updateSupervisor supervisorMsg model =
                     ( model, Supervisor.emit (Encode.string ("worker[" ++ workerId ++ "] says: " ++ str)) )
 
                 Err err ->
-                    ( model, Supervisor.emit (Encode.string ("worker[" ++ workerId ++ "] sent malformed example data!")) )
+                    ( model, Supervisor.emit (Encode.string ("worker[" ++ workerId ++ "] sent malformed example data:" ++ toString data)) )
 
         FromOutside data ->
             case Decode.decodeValue (Decode.object2 (,) ("msgType" := Decode.string) ("data" := Decode.string)) data of

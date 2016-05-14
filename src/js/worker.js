@@ -5,18 +5,14 @@ var receiveMessagePortName;
 module = typeof module === "undefined" ? {} : module;
 setTimeout = typeof setTimeout === "undefined" ? function(callback) { return callback() } : setTimeout;
 
-function sendError(err) {
-  self.postMessage({cmd: "WORKER_ERROR", contents: err});
-}
-
-function sendMessages(messages) {
-  messages.forEach(function(msg) {
-    self.postMessage({cmd: "MESSAGE_FROM_WORKER", contents: msg});
-  });
+function sendMessage(message) {
+  console.log("POSTM")
+  self.postMessage(message);
 }
 
 self.onmessage = function(event) {
   var msg = event.data;
+  console.log("worker got a msg");
 
   switch (msg.cmd) {
     case "INIT_WORKER":

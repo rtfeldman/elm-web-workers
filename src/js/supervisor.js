@@ -152,25 +152,11 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
             }
 
             worker.onmessage = function(event) {
-              var data = event.data || {};
-              var contents = data.contents;
-
-              switch (data.cmd) {
-                case "WORKER_ERROR":
-                  return console.error("Error in worker[" + workerId + "]: " + contents);
-
-                case "MESSAGE_FROM_WORKER":
-                  if (typeof contents === "undefined") {
-                    return console.error("Received `undefined` as a message from worker[" + workerId + "]");
-                  } else {
-                    // When the worker sends a message, tag it with this workerId
-                    // and then send it along for the supervisor to handle.
-                    return send({forWorker: false, workerId: workerId, data: contents});
-                  }
-
-                default:
-                  throw new Error("Received unrecognized msgType from worker[" + workerId + "]: " + contents);
-              }
+              (event.data || []).forEach(function(contents) {
+                // When the worker sends a message, tag it with this workerId
+                // and then send it along for the supervisor to handle.
+                return send({forWorker: false, workerId: workerId, data: contents});
+              });
             };
 
             // Record this new worker in the lookup table.
