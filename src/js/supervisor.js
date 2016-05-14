@@ -147,13 +147,17 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
             // This workerId is unknown to us; init a new worker before sending.
             var worker = new Worker(workerPath);
 
+            worker.onerror = function(err) {
+              console.error("Exception in worker[" + workerId + "]: " + JSON.stringify(err));
+            }
+
             worker.onmessage = function(event) {
               var data = event.data || {};
               var contents = data.contents;
 
               switch (data.cmd) {
                 case "WORKER_ERROR":
-                  return console.error("Exception in worker[" + workerId + "]: " + contents);
+                  return console.error("Error in worker[" + workerId + "]: " + contents);
 
                 case "MESSAGE_FROM_WORKER":
                   if (typeof contents === "undefined") {
