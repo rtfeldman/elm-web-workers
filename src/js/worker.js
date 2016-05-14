@@ -28,13 +28,7 @@ self.onmessage = function(event) {
 
           Elm = typeof Elm === "undefined" ? module.exports : Elm;
 
-          elmApp =
-              Elm[config.elmModuleName].worker()
-
-          // elmApp =
-          //   typeof config.args === "undefined"
-          //     ? Elm[config.elmModuleName].worker()
-          //     : Elm[config.elmModuleName].worker(config.args);
+          elmApp = Elm[config.elmModuleName].worker(config.args);
 
           elmApp.ports[config.sendMessagePortName].subscribe(sendMessage);
         } catch(err) {

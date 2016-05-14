@@ -7,13 +7,7 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
 
   var Elm = typeof Elm === "undefined" ? require(elmPath) : Elm;
 
-  var elmApp =
-    Elm[elmModuleName].worker()
-
-  // var elmApp =
-  //   typeof args === "undefined"
-  //     ? Elm[elmModuleName].worker()
-  //     : Elm[elmModuleName].worker(args);
+  var elmApp = Elm[elmModuleName].worker(args);
 
   if (typeof sendMessagePortName === "undefined") {
     sendMessagePortName = "send";

@@ -2,7 +2,7 @@ var Supervisor = require("elm-web-workers").Supervisor;
 var path = require("path");
 var elmPath = path.join(__dirname, "Elm.js");
 
-var supervisor = new Supervisor(elmPath, "Example", {receiveMessage: null});
+var supervisor = new Supervisor(elmPath, "Example");
 
 
 supervisor.on("emit", function(msg) {
