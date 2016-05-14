@@ -19,11 +19,13 @@ self.onmessage = function(event) {
         var config = JSON.parse(msg.data);
 
         try {
+          module = {};
+
           importScripts(config.elmPath);
+          var Elm = module.exports;
 
           receiveMessagePortName = config.receiveMessagePortName;
 
-          Elm = typeof Elm === "undefined" ? module.exports : Elm;
 
           elmApp = Elm[config.elmModuleName].worker(config.args);
 
