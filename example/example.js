@@ -15,15 +15,16 @@ supervisor.on("close", function(msg) {
 supervisor.start();
 
 supervisor.send({msgType: "echo", data: "Spawning some workers..."});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
+supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "5"});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
 
 
 setInterval(function() {

@@ -1,4 +1,6 @@
-var Worker = typeof Worker === "undefined" ? require("webworker-threads").Worker : Worker;
+if (typeof Worker === "undefined") {
+  Worker = require("webworker-threads").Worker;
+}
 
 function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMessagePortName, workerPath) {
   if (typeof workerPath === "undefined") {
@@ -148,29 +150,49 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
             var worker = new Worker(workerPath);
 
             worker.onerror = function(err) {
-              console.error("Exception in worker[" + workerId + "]: " + JSON.stringify(err));
+              throw("Exception in worker[" + workerId + "]: " + JSON.stringify(err));
             }
 
-            worker.onmessage = function(event) {
-              (event.data || []).forEach(function(contents) {
-                // When the worker sends a message, tag it with this workerId
-                // and then send it along for the supervisor to handle.
-                return send({forWorker: false, workerId: workerId, data: contents});
-              });
-            };
+            function handleWorkerMessage(event) {
+              switch (event.data.type) {
+                case "initialized":
+                  console.log("WORKER " + workerId + " initialized");
+                  worker.postMessage(message);
+
+                  break;
+
+                case "setTimeout":
+                  var delay = event.data.delay;
+                  var id = event.data.id;
+
+                  setTimeout(function() {
+                    worker.postMessage({cmd: "RUN_SET_TIMEOUT_CALLBACK", data: id});
+                  }, delay);
+
+                  break;
+
+                case "messages":
+                  (event.data.contents || []).forEach(function(contents) {
+                    // When the worker sends a message, tag it with this workerId
+                    // and then send it along for the supervisor to handle.
+                    return send({forWorker: false, workerId: workerId, data: contents});
+                  });
+
+                  break;
+
+                default:
+                  throw new Error("Unrecognized worker message type: " + event.data.type);
+              }
+            }
+
+            worker.onmessage = handleWorkerMessage;
 
             // Record this new worker in the lookup table.
             workers[workerId] = worker;
 
-            // Give the worker a tick to initialize before posting the message.
-            return setTimeout(function() {
-              worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
-
-              return setTimeout(function() {
-                worker.postMessage(message);
-              });
-            }, 0);
+            worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
           }
+          break;
         }
 
       default:
@@ -187,6 +209,7 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
     }
   });
 }
+
 
 if (typeof module === "object") {
   module.exports = Supervisor;
