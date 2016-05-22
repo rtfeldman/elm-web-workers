@@ -66,27 +66,24 @@ self.onmessage = function(event) {
     default:
       throw new Error("Unrecognized worker command: " + msg.cmd);
   }
-
-  // This is mandatory somehow. #WTF
-  // self.close();
 };
 
-// This is a hack to implement setTimeout on a worker by telling the supervisor
-// we want a setTimeout to happen, then having the supervisor report back when
-// we should run the callback. This is necessary because the generated Elm code
-// relies on setTimeout functioning properly in order to yield in between work
-// queue operations. If you instead polyfill setTimeout using something like
-// function(callback) { return callback(); }, the behavior you get is that
-// spawnLoop never yields, and thus never terminates, and the worker gets stuck.
-var setTimeouts = {};
-var setTimeoutId = 0;
-
+// Polyfill setTimeout
 if (typeof setTimeout === "undefined") {
-  setTimeout = function setTimeout(callback, delay) {
-    setTimeoutId++;
-    setTimeouts[setTimeoutId] = callback;
+  function delayUntil(time, callback) {
+    if (new Date().getTime() >= time) {
+      callback();
+    } else {
+      self.thread.nextTick(function() { delayUntil(time, callback); });
+    }
+  }
 
-    self.postMessage({type: "setTimeout", delay: delay, id: setTimeoutId});
+  setTimeout = function setTimeout(callback, delay) {
+    if (delay === 0) {
+      self.thread.nextTick(callback);
+    } else {
+      delayUntil(new Date().getTime() + delay, callback);
+    }
   }
 }
 
