@@ -156,7 +156,6 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
             function handleWorkerMessage(event) {
               switch (event.data.type) {
                 case "initialized":
-                  console.log("WORKER " + workerId + " initialized");
                   worker.postMessage(message);
 
                   break;
