@@ -1,10 +1,10 @@
-// self.postMessage("I'm still working before postMessage('ali').");
-
-// self.onmessage = function(event) {
-  // postMessage('Hi ' + event.data);
-  // self.close();
-// };
-
+// TODO: this still doesn't quite work right. Messages are getting dropped.
+// In a browser, things work great.
+// In here, not so much. Not all the threads report that they initialized
+// successfully, and then even fewer greet successfully.
+// onerror doesn't work, so we need to wrap everything in a try/catch
+// and send a {type: error} message to the parent if something blows up.
+// At least that will get us some visibility.
 
 var receiveMessagePortName;
 
