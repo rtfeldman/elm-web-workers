@@ -12,16 +12,6 @@ self.onmessage = function(event) {
   var msg = event.data;
 
   switch (msg.cmd) {
-    case "RUN_SET_TIMEOUT_CALLBACK":
-      var id = msg.data;
-      var callback = setTimeouts[id];
-
-      setTimeouts[id] = undefined;
-
-      callback();
-
-      break;
-
     case "INIT_WORKER":
       if (typeof elmApp === "undefined") {
         var config = JSON.parse(msg.data);

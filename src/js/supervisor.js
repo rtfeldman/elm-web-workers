@@ -160,16 +160,6 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
 
                   break;
 
-                case "setTimeout":
-                  var delay = event.data.delay;
-                  var id = event.data.id;
-
-                  setTimeout(function() {
-                    worker.postMessage({cmd: "RUN_SET_TIMEOUT_CALLBACK", data: id});
-                  }, delay);
-
-                  break;
-
                 case "messages":
                   (event.data.contents || []).forEach(function(contents) {
                     // When the worker sends a message, tag it with this workerId
