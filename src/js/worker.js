@@ -60,6 +60,9 @@ self.onmessage = function(event) {
 
 // Polyfill setTimeout
 if (typeof setTimeout === "undefined") {
+  // TODO verify that this actually works with values other than 0. It has never
+  // been verified as of the writing of this comment, but should be before
+  // someone uses `sleep` and is surprised when it (maybe) doesn't work.
   function delayUntil(time, callback) {
     if (new Date().getTime() >= time) {
       callback();
