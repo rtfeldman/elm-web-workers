@@ -1,8 +1,4 @@
-var Supervisor = require("elm-web-workers");
-var path = require("path");
-var elmPath = path.join(__dirname, "Elm.js");
-
-var supervisor = new Supervisor(elmPath, "Example");
+var supervisor = new Supervisor("Elm.js", "Example");
 
 supervisor.on("emit", function(msg) {
   console.log("[supervisor]:", msg);
@@ -18,14 +14,7 @@ supervisor.send({msgType: "echo", data: "Spawning some workers..."});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
-supervisor.send({msgType: "spawn", data: "" + Math.random()});
 supervisor.send({msgType: "spawn", data: "5"});
-
 
 setInterval(function() {
   supervisor.send({msgType: "echoViaWorker", data: "5"});

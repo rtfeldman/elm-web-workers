@@ -1,26 +1,24 @@
-var Worker = typeof Worker === "undefined" ? require("webworker-threads").Worker : Worker;
+if (typeof Worker === "undefined") {
+  Worker = require("webworker-threads").Worker;
+}
 
 function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMessagePortName, workerPath) {
   if (typeof workerPath === "undefined") {
-    workerPath = (require && require.resolve) ? require.resolve("./worker.js") : "worker.js";
+    workerPath = (typeof require !== "undefined" && require.resolve) ? require.resolve("./worker.js") : "worker.js";
   }
 
-  if (typeof args === "undefined") {
-    args = {};
-  }
+  Elm = typeof Elm === "undefined" ? require(elmPath) : Elm;
 
-  var Elm = typeof Elm === "undefined" ? require(elmPath) : Elm;
-
-  var elmApp = Elm.worker(Elm[elmModuleName], args);
+  var elmApp = Elm[elmModuleName].worker(args);
 
   if (typeof sendMessagePortName === "undefined") {
-    sendMessagePortName = "sendMessage";
+    sendMessagePortName = "send";
   } else if (typeof sendMessagePortName !== "string") {
     throw new Error("Invalid sendMessagePortName: " + sendMessagePortName);
   }
 
   if (typeof receiveMessagePortName === "undefined") {
-    receiveMessagePortName = "receiveMessage";
+    receiveMessagePortName = "receive";
   } else if (typeof receiveMessagePortName !== "string") {
     throw new Error("Invalid receiveMessagePortName: " + receiveMessagePortName);
   }
@@ -66,6 +64,7 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
   }
 
   var started = false; // CAUTION: this gets mutated!
+  var sendQueue = []; // CAUTION: this gets mutated!
 
   this.start = function() {
     if (started) {
@@ -74,15 +73,31 @@ function Supervisor(elmPath, elmModuleName, args, sendMessagePortName, receiveMe
       var workerConfig = JSON.stringify({
         elmPath: elmPath,
         elmModuleName: elmModuleName,
+        receiveMessagePortName: receiveMessagePortName,
+        sendMessagePortName: sendMessagePortName,
         args: args
       });
 
       supervise(subscribe, send, emit, workerPath, workerConfig);
     }
+
+    // Clear out the send queue.
+    // NOTE: we must wrap this in a setTimeout, as sending immediately after
+    // calling start() drops the messages on Node.js for some as-yet unknown reason.
+    setTimeout(function() {
+      sendQueue.forEach(function(thunk) { thunk() });
+
+      sendQueue = undefined;
+    }, 0);
   }
 
   this.send = function(data) {
-    return send({forWorker: false, workerId: null, data: data});
+    if (typeof sendQueue === "undefined") {
+      return send({forWorker: false, workerId: null, data: data});
+    } else {
+      // If we haven't started yet, enqueue the messages for sending later.
+      sendQueue.push(function() { send({forWorker: false, workerId: null, data: data}); });
+    }
   }
 
   this.Elm = Elm;
@@ -126,44 +141,47 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
 
           return emitClose("Error: Cannot send message " + msg + " to workerId `" + workerId + "`!");
         } else {
-          // CAUTION: this may get mutated!
-          var messages = [{cmd: "SEND_TO_WORKER", data: msg.data}];
+          var message = {cmd: "SEND_TO_WORKER", data: msg.data};
 
-          if (!workers.hasOwnProperty(workerId)) {
+          if (workers.hasOwnProperty(workerId)) {
+            return workers[workerId].postMessage(message);
+          } else {
             // This workerId is unknown to us; init a new worker before sending.
             var worker = new Worker(workerPath);
 
-            worker.onmessage = function(event) {
-              var data = event.data || {};
-              var contents = data.contents;
+            worker.onerror = function(err) {
+              throw("Exception in worker[" + workerId + "]: " + JSON.stringify(err));
+            }
 
-              switch (data.cmd) {
-                case "WORKER_ERROR":
-                  return console.error("Exception in worker[" + workerId + "]: " + contents);
+            function handleWorkerMessage(event) {
+              switch (event.data.type) {
+                case "initialized":
+                  worker.postMessage(message);
 
-                case "MESSAGE_FROM_WORKER":
-                  if (typeof contents === "undefined") {
-                    return console.error("Received `undefined` as a message from worker[" + workerId + "]");
-                  } else {
-                    contents.forEach(function(content) {
-                      // When the worker sends a message, tag it with this workerId
-                      // and then send it along for the supervisor to handle.
-                      return send({forWorker: false, workerId: workerId, data: content});
-                    });
-                  }
+                  break;
+
+                case "messages":
+                  (event.data.contents || []).forEach(function(contents) {
+                    // When the worker sends a message, tag it with this workerId
+                    // and then send it along for the supervisor to handle.
+                    return send({forWorker: false, workerId: workerId, data: contents});
+                  });
+
+                  break;
 
                 default:
-                  throw new Error("Received unrecognized msgType from worker[" + workerId + "]: " + contents);
+                  throw new Error("Unrecognized worker message type: " + event.data.type);
               }
-            };
+            }
 
-            messages.unshift({cmd: "INIT_WORKER", data: workerConfig});
+            worker.onmessage = handleWorkerMessage;
 
             // Record this new worker in the lookup table.
             workers[workerId] = worker;
-          }
 
-          return workers[workerId].postMessage(messages);
+            worker.postMessage({cmd: "INIT_WORKER", data: workerConfig});
+          }
+          break;
         }
 
       default:
@@ -181,4 +199,7 @@ function supervise(subscribe, send, emit, workerPath, workerConfig) {
   });
 }
 
-module.exports.Supervisor = Supervisor;
+
+if (typeof module === "object") {
+  module.exports = Supervisor;
+}

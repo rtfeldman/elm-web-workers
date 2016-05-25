@@ -1,56 +1,90 @@
-var module = typeof module === "undefined" ? {} : module;
-var setTimeout = typeof setTimeout === "undefined" ? function(callback) { return callback() } : setTimeout;
-var Elm;
-var elmApp;
+// TODO: this still doesn't quite work right. Messages are getting dropped.
+// In a browser, things work great.
+// In here, not so much. Not all the threads report that they initialized
+// successfully, and then even fewer greet successfully.
+// onerror doesn't work, so we need to wrap everything in a try/catch
+// and send a {type: error} message to the parent if something blows up.
+// At least that will get us some visibility.
 
-function sendError(err) {
-  self.postMessage({cmd: "WORKER_ERROR", contents: err});
-}
-
-function sendMessage(message) {
-  self.postMessage({cmd: "MESSAGE_FROM_WORKER", contents: message});
-}
+var receiveMessagePortName;
 
 self.onmessage = function(event) {
-  var messages = event.data;
+  var msg = event.data;
 
-  messages.forEach(function(msg) {
-    switch (msg.cmd) {
-      case "INIT_WORKER":
-        if (typeof elmApp === "undefined") {
-          var config = JSON.parse(msg.data);
-
-          try {
-            importScripts(config.elmPath);
-
-            Elm = typeof Elm === "undefined" ? module.exports : Elm;
-            elmApp = Elm.worker(Elm[config.elmModuleName], config.args);
-          } catch(err) {
-            sendError("Error initializing Elm in worker: " + err);
-          }
-
-          elmApp.ports.sendMessage.subscribe(sendMessage);
-        } else {
-          sendError("Worker attempted to initialize twice!");
-        }
-
-        break;
-
-      case "SEND_TO_WORKER":
-        if (typeof elmApp === "undefined") {
-          sendError("Canot send() to a worker that has not yet been initialized!");
-        }
+  switch (msg.cmd) {
+    case "INIT_WORKER":
+      if (typeof elmApp === "undefined") {
+        var config = JSON.parse(msg.data);
 
         try {
-          elmApp.ports.receiveMessage.send({forWorker: true, workerId: null, data: msg.data});
-        } catch (err) {
-          sendError("Error attempting to send message to Elm Worker: " + err);
+          module = {};
+
+          importScripts(config.elmPath);
+          var Elm = module.exports;
+
+          receiveMessagePortName = config.receiveMessagePortName;
+
+          elmApp = Elm[config.elmModuleName].worker(config.args);
+
+          elmApp.ports[config.sendMessagePortName].subscribe(sendMessages);
+
+          // Tell the supervisor we're initialized, so it can run the
+          // pending message that was waiting for init to complete.
+          self.postMessage({type: "initialized"});
+        } catch(err) {
+          throw new Error("Error initializing Elm in worker: " + err);
         }
+      } else {
+        throw new Error("Worker attempted to initialize twice!");
+      }
 
-        break;
+      break;
 
-      default:
-        sendError("Unrecognized worker command: " + msg.cmd);
-    }
-  });
+    case "SEND_TO_WORKER":
+      if (typeof elmApp === "undefined") {
+        throw new Error("Canot send() to a worker that has not yet been initialized!");
+      }
+
+      try {
+        elmApp.ports[receiveMessagePortName].send({forWorker: true, workerId: null, data: msg.data});
+      } catch (err) {
+        throw new Error("Error attempting to send message to Elm Worker: " + err);
+      }
+
+      break;
+
+    default:
+      throw new Error("Unrecognized worker command: " + msg.cmd);
+  }
 };
+
+// Polyfill setTimeout
+if (typeof setTimeout === "undefined") {
+  // TODO verify that this actually works with values other than 0. It has never
+  // been verified as of the writing of this comment, but should be before
+  // someone uses `sleep` and is surprised when it (maybe) doesn't work.
+  function delayUntil(time, callback) {
+    if (new Date().getTime() >= time) {
+      callback();
+    } else {
+      self.thread.nextTick(function() { delayUntil(time, callback); });
+    }
+  }
+
+  setTimeout = function setTimeout(callback, delay) {
+    if (delay === 0) {
+      self.thread.nextTick(callback);
+    } else {
+      delayUntil(new Date().getTime() + delay, callback);
+    }
+  }
+}
+
+if (typeof module === "undefined") {
+  module = {};
+}
+
+
+function sendMessages(messages) {
+  self.postMessage({type: "messages", contents: messages});
+}

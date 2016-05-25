@@ -4,7 +4,7 @@
   "description": "",
   "main": "example.js",
   "scripts": {
-    "example": "elm-make Example.elm --output=Elm.js && echo \"\nmodule.exports = Elm;\" >> Elm.js && node example.js"
+    "example": "elm-make Example.elm --output=Elm.js && node example.js"
   },
   "author": "Richard Feldman<richard.t.feldman@gmail.com>",
   "license": "BSD-3-Clause",
