@@ -88,6 +88,9 @@ jsonUpdate config json role =
                 ( supervisorModel, supervisorInitCmd ) =
                     config.supervisor.init
 
+                initCmd =
+                    Cmd.map InternalSupervisorMsg supervisorInitCmd
+
                 workerModel =
                     fst config.worker.init
 
