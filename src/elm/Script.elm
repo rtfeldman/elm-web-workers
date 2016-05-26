@@ -1,8 +1,8 @@
-module Script exposing (ParallelProgram, program)
+module Script exposing (ParallelProgram, program, WorkerCommands, SupervisorCommands)
 
 {-|
 
-@docs ParallelProgram, program
+@docs ParallelProgram, program, WorkerCommands, SupervisorCommands
 -}
 
 -- This is where the magic happens
@@ -10,22 +10,47 @@ module Script exposing (ParallelProgram, program)
 import Json.Decode as Decode exposing (Value, Decoder, (:=), decodeValue)
 import Json.Decode.Extra as Extra
 import Json.Encode as Encode
-import Script.Worker as Worker
-import Script.Supervisor as Supervisor exposing (WorkerId)
 import Html.App
 import Html exposing (Html)
+
+
+type alias WorkerId =
+    String
+
+
+{-| -}
+type alias WorkerCommands =
+    { send : Value -> Cmd Value
+    , close : Cmd Value
+    }
+
+
+{-| -}
+type alias SupervisorCommands =
+    { send : WorkerId -> Value -> Cmd Value
+    , terminate : WorkerId -> Cmd Value
+    , close : Cmd Value
+    }
 
 
 {-| -}
 type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
     { worker :
-        { update : workerMsg -> workerModel -> ( workerModel, Cmd workerMsg )
+        { update :
+            WorkerCommands
+            -> workerMsg
+            -> workerModel
+            -> ( workerModel, Cmd workerMsg )
         , decode : Value -> workerMsg
         , init : ( workerModel, Cmd workerMsg )
         , subscriptions : workerModel -> Sub workerMsg
         }
     , supervisor :
-        { update : supervisorMsg -> supervisorModel -> ( supervisorModel, Cmd supervisorMsg )
+        { update :
+            SupervisorCommands
+            -> supervisorMsg
+            -> supervisorModel
+            -> ( supervisorModel, Cmd supervisorMsg )
         , decode : WorkerId -> Value -> supervisorMsg
         , init : ( supervisorModel, Cmd supervisorMsg )
         , subscriptions : supervisorModel -> Sub supervisorMsg
@@ -33,6 +58,52 @@ type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
         }
     , receive : Sub Value
     , send : Value -> Cmd Value
+    }
+
+
+getWorkerCommands : (Value -> Cmd Value) -> WorkerCommands
+getWorkerCommands send =
+    { send =
+        \value ->
+            [ ( "cmd", Encode.string "SEND_TO_SUPERVISOR" )
+            , ( "data", value )
+            ]
+                |> Encode.object
+                |> send
+    , close =
+        [ ( "cmd", Encode.string "CLOSE" )
+        , ( "data", Encode.null )
+        ]
+            |> Encode.object
+            |> send
+    }
+
+
+getSupervisorCommands : (Value -> Cmd Value) -> SupervisorCommands
+getSupervisorCommands send =
+    { send =
+        \workerId value ->
+            [ ( "cmd", Encode.string "SEND_TO_WORKER" )
+            , ( "workerId", Encode.string workerId )
+            , ( "data", value )
+            ]
+                |> Encode.object
+                |> send
+    , terminate =
+        \workerId ->
+            [ ( "cmd", Encode.string "TERMINATE" )
+            , ( "workerId", Encode.string workerId )
+            , ( "data", Encode.null )
+            ]
+                |> Encode.object
+                |> send
+    , close =
+        [ ( "cmd", Encode.string "CLOSE" )
+        , ( "workerId", Encode.null )
+        , ( "data", Encode.null )
+        ]
+            |> Encode.object
+            |> send
     }
 
 
@@ -55,13 +126,13 @@ workerUpdate :
     -> workerModel
     -> supervisorModel
     -> workerMsg
-    -> ( Role workerModel supervisorModel, Cmd workerMsg )
+    -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
 workerUpdate config workerModel supervisorModel msg =
     let
         ( newModel, cmd ) =
-            config.worker.update msg workerModel
+            config.worker.update (getWorkerCommands config.send) msg workerModel
     in
-        ( Worker newModel supervisorModel, cmd )
+        ( Worker newModel supervisorModel, Cmd.map InternalWorkerMsg cmd )
 
 
 supervisorUpdate :
@@ -69,13 +140,13 @@ supervisorUpdate :
     -> workerModel
     -> supervisorModel
     -> supervisorMsg
-    -> ( Role workerModel supervisorModel, Cmd supervisorMsg )
+    -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
 supervisorUpdate config workerModel supervisorModel msg =
     let
         ( newModel, cmd ) =
-            config.supervisor.update msg supervisorModel
+            config.supervisor.update (getSupervisorCommands config.send) msg supervisorModel
     in
-        ( Supervisor workerModel newModel, cmd )
+        ( Supervisor workerModel newModel, Cmd.map InternalSupervisorMsg cmd )
 
 
 jsonUpdate :
@@ -123,20 +194,18 @@ jsonUpdate config json role =
                 ( newRole, Cmd.batch [ initCmd, newCmd ] )
 
         ( Supervisor workerModel supervisorModel, Ok ( False, Just workerId, data ) ) ->
-            let
-                -- We're a supervisor; process the message accordingly
-                ( newRole, supervisorCmd ) =
-                    supervisorUpdate config workerModel supervisorModel (config.supervisor.decode workerId data)
-            in
-                ( newRole, Cmd.map InternalSupervisorMsg supervisorCmd )
+            -- We're a supervisor; process the message accordingly
+            supervisorUpdate config
+                workerModel
+                supervisorModel
+                (config.supervisor.decode workerId data)
 
         ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
-            let
-                -- We're a worker; process the message accordingly
-                ( newRole, workerCmd ) =
-                    workerUpdate config workerModel supervisorModel (config.worker.decode data)
-            in
-                ( newRole, Cmd.map InternalWorkerMsg workerCmd )
+            -- We're a worker; process the message accordingly
+            workerUpdate config
+                workerModel
+                supervisorModel
+                (config.worker.decode data)
 
         ( Worker _ _, Ok ( True, Just _, data ) ) ->
             Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
@@ -159,18 +228,10 @@ update :
 update config internalMsg role =
     case ( role, internalMsg ) of
         ( Worker workerModel supervisorModel, InternalWorkerMsg msg ) ->
-            let
-                ( newRole, workerMsg ) =
-                    workerUpdate config workerModel supervisorModel msg
-            in
-                ( newRole, Cmd.map InternalWorkerMsg workerMsg )
+            workerUpdate config workerModel supervisorModel msg
 
         ( Supervisor workerModel supervisorModel, InternalSupervisorMsg msg ) ->
-            let
-                ( newRole, supervisorMsg ) =
-                    supervisorUpdate config workerModel supervisorModel msg
-            in
-                ( newRole, Cmd.map InternalSupervisorMsg supervisorMsg )
+            supervisorUpdate config workerModel supervisorModel msg
 
         ( Worker workerModel supervisorModel, InternalSupervisorMsg msg ) ->
             Debug.crash ("Received an internal supervisor message as a worker!" ++ toString msg)
