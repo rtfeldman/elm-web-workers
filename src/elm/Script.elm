@@ -20,16 +20,16 @@ type alias WorkerId =
 
 {-| -}
 type alias WorkerCommands =
-    { send : Value -> Cmd Value
-    , close : Cmd Value
+    { send : Value -> Cmd ()
+    , close : Cmd ()
     }
 
 
 {-| -}
 type alias SupervisorCommands =
-    { send : WorkerId -> Value -> Cmd Value
-    , terminate : WorkerId -> Cmd Value
-    , close : Cmd Value
+    { send : WorkerId -> Value -> Cmd ()
+    , terminate : WorkerId -> Cmd ()
+    , close : Cmd ()
     }
 
 
@@ -57,11 +57,11 @@ type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
         , view : supervisorModel -> Html supervisorMsg
         }
     , receive : Sub Value
-    , send : Value -> Cmd Value
+    , send : Value -> Cmd ()
     }
 
 
-getWorkerCommands : (Value -> Cmd Value) -> WorkerCommands
+getWorkerCommands : (Value -> Cmd ()) -> WorkerCommands
 getWorkerCommands send =
     { send =
         \value ->
@@ -79,7 +79,7 @@ getWorkerCommands send =
     }
 
 
-getSupervisorCommands : (Value -> Cmd Value) -> SupervisorCommands
+getSupervisorCommands : (Value -> Cmd ()) -> SupervisorCommands
 getSupervisorCommands send =
     { send =
         \workerId value ->
