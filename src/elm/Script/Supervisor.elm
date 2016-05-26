@@ -1,12 +1,21 @@
 module Script.Supervisor exposing (Cmd, terminate, send, emit, batch, none, WorkerId, SupervisorMsg(..), encodeCmd)
 
+{-| Helpers for running supervisors.
+
+@docs Cmd, terminate, send, emit, batch, none, WorkerId, SupervisorMsg, encodeCmd
+-}
+
+-- This is where the magic happens
+
 import Json.Encode as Encode exposing (Value)
 
 
+{-| -}
 type alias WorkerId =
     String
 
 
+{-| -}
 type SupervisorMsg
     = FromWorker WorkerId Value
     | FromOutside Value
@@ -77,6 +86,7 @@ batch =
     Batch
 
 
+{-| -}
 emit : Value -> Cmd
 emit =
     Emit

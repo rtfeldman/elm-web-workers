@@ -1,5 +1,12 @@
 module Script.Worker exposing (Cmd, send, batch, none, encodeCmd)
 
+{-| Helpers for running workers.
+
+@docs Cmd, send, batch, none, encodeCmd
+-}
+
+-- This is where the magic happens
+
 import Json.Encode as Encode exposing (Value)
 
 
