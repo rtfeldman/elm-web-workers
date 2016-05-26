@@ -1,8 +1,8 @@
-module Script exposing (ParallelProgram, program, WorkerCommands, SupervisorCommands)
+module Script exposing (ParallelProgram, program, WorkerCommands, SupervisorCommands, WorkerId)
 
 {-|
 
-@docs ParallelProgram, program, WorkerCommands, SupervisorCommands
+@docs ParallelProgram, program, WorkerCommands, SupervisorCommands, WorkerId
 -}
 
 -- This is where the magic happens
@@ -14,22 +14,23 @@ import Html.App
 import Html exposing (Html)
 
 
+{-| -}
 type alias WorkerId =
     String
 
 
 {-| -}
-type alias WorkerCommands =
-    { send : Value -> Cmd ()
-    , close : Cmd ()
+type alias WorkerCommands workerMsg =
+    { send : Value -> Cmd workerMsg
+    , close : Cmd workerMsg
     }
 
 
 {-| -}
-type alias SupervisorCommands =
-    { send : WorkerId -> Value -> Cmd ()
-    , terminate : WorkerId -> Cmd ()
-    , close : Cmd ()
+type alias SupervisorCommands supervisorMsg =
+    { send : WorkerId -> Value -> Cmd supervisorMsg
+    , terminate : WorkerId -> Cmd supervisorMsg
+    , close : Cmd supervisorMsg
     }
 
 
@@ -37,31 +38,35 @@ type alias SupervisorCommands =
 type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
     { worker :
         { update :
-            WorkerCommands
+            WorkerCommands workerMsg
             -> workerMsg
             -> workerModel
             -> ( workerModel, Cmd workerMsg )
-        , decode : Value -> workerMsg
+        , receive : Value -> workerMsg
         , init : ( workerModel, Cmd workerMsg )
         , subscriptions : workerModel -> Sub workerMsg
         }
     , supervisor :
         { update :
-            SupervisorCommands
+            SupervisorCommands supervisorMsg
             -> supervisorMsg
             -> supervisorModel
             -> ( supervisorModel, Cmd supervisorMsg )
-        , decode : WorkerId -> Value -> supervisorMsg
+        , receive : WorkerId -> Value -> supervisorMsg
         , init : ( supervisorModel, Cmd supervisorMsg )
         , subscriptions : supervisorModel -> Sub supervisorMsg
         , view : supervisorModel -> Html supervisorMsg
         }
-    , receive : Sub Value
-    , send : Value -> Cmd ()
+    , ports : ( Value -> Cmd Never, Sub Value )
     }
 
 
-getWorkerCommands : (Value -> Cmd ()) -> WorkerCommands
+never : Never -> a
+never a =
+    never a
+
+
+getWorkerCommands : (Value -> Cmd Never) -> WorkerCommands msg
 getWorkerCommands send =
     { send =
         \value ->
@@ -70,16 +75,18 @@ getWorkerCommands send =
             ]
                 |> Encode.object
                 |> send
+                |> Cmd.map never
     , close =
         [ ( "cmd", Encode.string "CLOSE" )
         , ( "data", Encode.null )
         ]
             |> Encode.object
             |> send
+            |> Cmd.map never
     }
 
 
-getSupervisorCommands : (Value -> Cmd ()) -> SupervisorCommands
+getSupervisorCommands : (Value -> Cmd Never) -> SupervisorCommands msg
 getSupervisorCommands send =
     { send =
         \workerId value ->
@@ -89,6 +96,7 @@ getSupervisorCommands send =
             ]
                 |> Encode.object
                 |> send
+                |> Cmd.map never
     , terminate =
         \workerId ->
             [ ( "cmd", Encode.string "TERMINATE" )
@@ -97,6 +105,7 @@ getSupervisorCommands send =
             ]
                 |> Encode.object
                 |> send
+                |> Cmd.map never
     , close =
         [ ( "cmd", Encode.string "CLOSE" )
         , ( "workerId", Encode.null )
@@ -104,6 +113,7 @@ getSupervisorCommands send =
         ]
             |> Encode.object
             |> send
+            |> Cmd.map never
     }
 
 
@@ -128,11 +138,14 @@ getUpdate :
     -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
 getUpdate config =
     let
+        send =
+            fst config.ports
+
         workerCommands =
-            getWorkerCommands config.send
+            getWorkerCommands send
 
         supervisorCommands =
-            getSupervisorCommands config.send
+            getSupervisorCommands send
 
         workerUpdate workerModel supervisorModel msg =
             let
@@ -191,13 +204,13 @@ getUpdate config =
                     -- We're a supervisor; process the message accordingly
                     supervisorUpdate workerModel
                         supervisorModel
-                        (config.supervisor.decode workerId data)
+                        (config.supervisor.receive workerId data)
 
                 ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
                     -- We're a worker; process the message accordingly
                     workerUpdate workerModel
                         supervisorModel
-                        (config.worker.decode data)
+                        (config.worker.receive data)
 
                 ( Worker _ _, Ok ( True, Just _, data ) ) ->
                     Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
@@ -246,7 +259,7 @@ program config =
         , view = wrapView config.supervisor.view >> Maybe.withDefault (Html.text "")
         , update = getUpdate config
         , subscriptions =
-            wrapSubscriptions config.receive
+            wrapSubscriptions (snd config.ports)
                 config.worker.subscriptions
                 config.supervisor.subscriptions
         }
