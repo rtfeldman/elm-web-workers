@@ -140,29 +140,29 @@ update config internalMsg role =
                         ( newRole, Cmd.batch [ sendToWorker config initCmd, newCmd ] )
 
                 ( Supervisor workerModel supervisorModel, Ok ( False, maybeWorkerId, data ) ) ->
-                    let
-                        -- We're a supervisor; process the message accordingly
-                        subMsg =
-                            case maybeWorkerId of
-                                Nothing ->
-                                    FromOutside data
+                    Debug.crash "TODO"
 
-                                Just workerId ->
-                                    FromWorker workerId data
-
-                        ( newModel, cmd ) =
-                            supervisorUpdate config workerModel supervisorModel (config.supervisor.decode subMsg)
-                    in
-                        ( Supervisor workerModel newModel, sendToSupervisor config cmd )
-
+                --let
+                --    -- We're a supervisor; process the message accordingly
+                --    subMsg =
+                --        case maybeWorkerId of
+                --            Nothing ->
+                --                FromOutside data
+                --            Just workerId ->
+                --                FromWorker workerId data
+                --    ( newModel, cmd ) =
+                --        supervisorUpdate config workerModel supervisorModel (config.supervisor.decode subMsg)
+                --in
+                --    ( Supervisor workerModel newModel, sendToSupervisor config cmd )
                 ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
-                    let
-                        -- We're a worker; process the message accordingly
-                        ( newModel, cmd ) =
-                            workerUpdate config workerModel supervisorModel (config.worker.decode data)
-                    in
-                        ( Worker newModel supervisorModel, sendToWorker config cmd )
+                    Debug.crash "TODO"
 
+                --let
+                --    -- We're a worker; process the message accordingly
+                --    ( newModel, cmd ) =
+                --        workerUpdate config workerModel supervisorModel (config.worker.decode data)
+                --in
+                --    ( Worker newModel supervisorModel, sendToWorker config cmd )
                 ( Worker _ _, Ok ( True, Just _, data ) ) ->
                     Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
 
