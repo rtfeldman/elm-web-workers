@@ -61,9 +61,9 @@ type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
     }
 
 
-never : Never -> a
-never a =
-    never a
+fromNever : Never -> a
+fromNever a =
+    fromNever a
 
 
 getWorkerCommands : (Value -> Cmd Never) -> WorkerCommands msg
@@ -75,14 +75,14 @@ getWorkerCommands send =
             ]
                 |> Encode.object
                 |> send
-                |> Cmd.map never
+                |> Cmd.map fromNever
     , close =
         [ ( "cmd", Encode.string "CLOSE" )
         , ( "data", Encode.null )
         ]
             |> Encode.object
             |> send
-            |> Cmd.map never
+            |> Cmd.map fromNever
     }
 
 
@@ -96,7 +96,7 @@ getSupervisorCommands send =
             ]
                 |> Encode.object
                 |> send
-                |> Cmd.map never
+                |> Cmd.map fromNever
     , terminate =
         \workerId ->
             [ ( "cmd", Encode.string "TERMINATE" )
@@ -105,7 +105,7 @@ getSupervisorCommands send =
             ]
                 |> Encode.object
                 |> send
-                |> Cmd.map never
+                |> Cmd.map fromNever
     , close =
         [ ( "cmd", Encode.string "CLOSE" )
         , ( "workerId", Encode.null )
@@ -113,7 +113,7 @@ getSupervisorCommands send =
         ]
             |> Encode.object
             |> send
-            |> Cmd.map never
+            |> Cmd.map fromNever
     }
 
 
