@@ -121,132 +121,121 @@ type Role workerModel supervisorModel
     | Uninitialized
 
 
-workerUpdate :
-    ParallelProgram workerModel workerMsg supervisorModel supervisorMsg
-    -> workerModel
-    -> supervisorModel
-    -> workerMsg
-    -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
-workerUpdate config workerModel supervisorModel msg =
-    let
-        ( newModel, cmd ) =
-            config.worker.update (getWorkerCommands config.send) msg workerModel
-    in
-        ( Worker newModel supervisorModel, Cmd.map InternalWorkerMsg cmd )
-
-
-supervisorUpdate :
-    ParallelProgram workerModel workerMsg supervisorModel supervisorMsg
-    -> workerModel
-    -> supervisorModel
-    -> supervisorMsg
-    -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
-supervisorUpdate config workerModel supervisorModel msg =
-    let
-        ( newModel, cmd ) =
-            config.supervisor.update (getSupervisorCommands config.send) msg supervisorModel
-    in
-        ( Supervisor workerModel newModel, Cmd.map InternalSupervisorMsg cmd )
-
-
-jsonUpdate :
-    ParallelProgram workerModel workerMsg supervisorModel supervisorMsg
-    -> Value
-    -> Role workerModel supervisorModel
-    -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
-jsonUpdate config json role =
-    case ( role, Decode.decodeValue messageDecoder json ) of
-        ( _, Err err ) ->
-            Debug.crash ("Someone sent malformed JSON through the `receive` port: " ++ err)
-
-        ( Uninitialized, Ok ( False, _, data ) ) ->
-            let
-                -- We've received a supervisor message; we must be a supervisor!
-                ( supervisorModel, supervisorInitCmd ) =
-                    config.supervisor.init
-
-                initCmd =
-                    Cmd.map InternalSupervisorMsg supervisorInitCmd
-
-                workerModel =
-                    fst config.worker.init
-
-                ( newRole, newCmd ) =
-                    jsonUpdate config json (Supervisor workerModel supervisorModel)
-            in
-                ( newRole, Cmd.batch [ initCmd, newCmd ] )
-
-        ( Uninitialized, Ok ( True, _, data ) ) ->
-            let
-                -- We've received a worker message; we must be a worker!
-                ( workerModel, workerInitCmd ) =
-                    config.worker.init
-
-                initCmd =
-                    Cmd.map InternalWorkerMsg workerInitCmd
-
-                supervisorModel =
-                    fst config.supervisor.init
-
-                ( newRole, newCmd ) =
-                    jsonUpdate config json (Worker workerModel supervisorModel)
-            in
-                ( newRole, Cmd.batch [ initCmd, newCmd ] )
-
-        ( Supervisor workerModel supervisorModel, Ok ( False, Just workerId, data ) ) ->
-            -- We're a supervisor; process the message accordingly
-            supervisorUpdate config
-                workerModel
-                supervisorModel
-                (config.supervisor.decode workerId data)
-
-        ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
-            -- We're a worker; process the message accordingly
-            workerUpdate config
-                workerModel
-                supervisorModel
-                (config.worker.decode data)
-
-        ( Worker _ _, Ok ( True, Just _, data ) ) ->
-            Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
-
-        ( Worker _ _, Ok ( False, _, _ ) ) ->
-            Debug.crash "Received supervisor message while running as worker."
-
-        ( Supervisor _ _, Ok ( False, Nothing, _ ) ) ->
-            Debug.crash "Received supervisor message without a workerId."
-
-        ( Supervisor _ _, Ok ( True, _, _ ) ) ->
-            Debug.crash "Received worker message while running as supervisor."
-
-
-update :
+getUpdate :
     ParallelProgram workerModel workerMsg supervisorModel supervisorMsg
     -> InternalMsg workerMsg supervisorMsg
     -> Role workerModel supervisorModel
     -> ( Role workerModel supervisorModel, Cmd (InternalMsg workerMsg supervisorMsg) )
-update config internalMsg role =
-    case ( role, internalMsg ) of
-        ( Worker workerModel supervisorModel, InternalWorkerMsg msg ) ->
-            workerUpdate config workerModel supervisorModel msg
+getUpdate config =
+    let
+        workerCommands =
+            getWorkerCommands config.send
 
-        ( Supervisor workerModel supervisorModel, InternalSupervisorMsg msg ) ->
-            supervisorUpdate config workerModel supervisorModel msg
+        supervisorCommands =
+            getSupervisorCommands config.send
 
-        ( Worker workerModel supervisorModel, InternalSupervisorMsg msg ) ->
-            Debug.crash ("Received an internal supervisor message as a worker!" ++ toString msg)
+        workerUpdate workerModel supervisorModel msg =
+            let
+                ( newModel, cmd ) =
+                    config.worker.update workerCommands msg workerModel
+            in
+                ( Worker newModel supervisorModel, Cmd.map InternalWorkerMsg cmd )
 
-        ( Supervisor workerModel supervisorModel, InternalWorkerMsg msg ) ->
-            Debug.crash ("Received an internal worker message as a supervisor: " ++ toString msg)
+        supervisorUpdate workerModel supervisorModel msg =
+            let
+                ( newModel, cmd ) =
+                    config.supervisor.update supervisorCommands msg supervisorModel
+            in
+                ( Supervisor workerModel newModel, Cmd.map InternalSupervisorMsg cmd )
 
-        ( Uninitialized, InternalSupervisorMsg msg ) ->
-            Debug.crash ("Received an internal supervisor message when uninitialized!" ++ toString msg)
+        jsonUpdate config json role =
+            case ( role, Decode.decodeValue messageDecoder json ) of
+                ( _, Err err ) ->
+                    Debug.crash ("Someone sent malformed JSON through the `receive` port: " ++ err)
 
-        ( Uninitialized, InternalWorkerMsg msg ) ->
-            Debug.crash ("Received an internal worker message when uninitialized: " ++ toString msg)
+                ( Uninitialized, Ok ( False, _, data ) ) ->
+                    let
+                        -- We've received a supervisor message; we must be a supervisor!
+                        ( supervisorModel, supervisorInitCmd ) =
+                            config.supervisor.init
 
-        ( _, InternalJsonMsg json ) ->
-            jsonUpdate config json role
+                        initCmd =
+                            Cmd.map InternalSupervisorMsg supervisorInitCmd
+
+                        workerModel =
+                            fst config.worker.init
+
+                        ( newRole, newCmd ) =
+                            jsonUpdate config json (Supervisor workerModel supervisorModel)
+                    in
+                        ( newRole, Cmd.batch [ initCmd, newCmd ] )
+
+                ( Uninitialized, Ok ( True, _, data ) ) ->
+                    let
+                        -- We've received a worker message; we must be a worker!
+                        ( workerModel, workerInitCmd ) =
+                            config.worker.init
+
+                        initCmd =
+                            Cmd.map InternalWorkerMsg workerInitCmd
+
+                        supervisorModel =
+                            fst config.supervisor.init
+
+                        ( newRole, newCmd ) =
+                            jsonUpdate config json (Worker workerModel supervisorModel)
+                    in
+                        ( newRole, Cmd.batch [ initCmd, newCmd ] )
+
+                ( Supervisor workerModel supervisorModel, Ok ( False, Just workerId, data ) ) ->
+                    -- We're a supervisor; process the message accordingly
+                    supervisorUpdate workerModel
+                        supervisorModel
+                        (config.supervisor.decode workerId data)
+
+                ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
+                    -- We're a worker; process the message accordingly
+                    workerUpdate workerModel
+                        supervisorModel
+                        (config.worker.decode data)
+
+                ( Worker _ _, Ok ( True, Just _, data ) ) ->
+                    Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
+
+                ( Worker _ _, Ok ( False, _, _ ) ) ->
+                    Debug.crash "Received supervisor message while running as worker."
+
+                ( Supervisor _ _, Ok ( False, Nothing, _ ) ) ->
+                    Debug.crash "Received supervisor message without a workerId."
+
+                ( Supervisor _ _, Ok ( True, _, _ ) ) ->
+                    Debug.crash "Received worker message while running as supervisor."
+    in
+        -- This is the actual update function. Everything up to this point has
+        -- been prep work that only needs to be done once, not every time
+        -- udpate gets called.
+        \internalMsg role ->
+            case ( role, internalMsg ) of
+                ( Worker workerModel supervisorModel, InternalWorkerMsg msg ) ->
+                    workerUpdate workerModel supervisorModel msg
+
+                ( Supervisor workerModel supervisorModel, InternalSupervisorMsg msg ) ->
+                    supervisorUpdate workerModel supervisorModel msg
+
+                ( Worker workerModel supervisorModel, InternalSupervisorMsg msg ) ->
+                    Debug.crash ("Received an internal supervisor message as a worker!" ++ toString msg)
+
+                ( Supervisor workerModel supervisorModel, InternalWorkerMsg msg ) ->
+                    Debug.crash ("Received an internal worker message as a supervisor: " ++ toString msg)
+
+                ( Uninitialized, InternalSupervisorMsg msg ) ->
+                    Debug.crash ("Received an internal supervisor message when uninitialized!" ++ toString msg)
+
+                ( Uninitialized, InternalWorkerMsg msg ) ->
+                    Debug.crash ("Received an internal worker message when uninitialized: " ++ toString msg)
+
+                ( _, InternalJsonMsg json ) ->
+                    jsonUpdate config json role
 
 
 {-| -}
@@ -255,7 +244,7 @@ program config =
     Html.App.program
         { init = ( Uninitialized, Cmd.none )
         , view = wrapView config.supervisor.view >> Maybe.withDefault (Html.text "")
-        , update = update config
+        , update = getUpdate config
         , subscriptions =
             wrapSubscriptions config.receive
                 config.worker.subscriptions
