@@ -1,4 +1,9 @@
-module Script exposing (..)
+module Script exposing (ParallelProgram, program)
+
+{-|
+
+@docs ParallelProgram, program
+-}
 
 -- This is where the magic happens
 
@@ -11,6 +16,7 @@ import Html.App
 import Html exposing (Html)
 
 
+{-| -}
 type alias ParallelProgram workerModel workerMsg supervisorModel supervisorMsg =
     { worker :
         { update : workerMsg -> workerModel -> ( workerModel, Cmd workerMsg )
@@ -99,45 +105,50 @@ jsonUpdate config json role =
             in
                 ( newRole, Cmd.batch [ initCmd, newCmd ] )
 
-        _ ->
-            Debug.crash "TODO"
+        ( Uninitialized, Ok ( True, _, data ) ) ->
+            let
+                -- We've received a worker message; we must be a worker!
+                ( workerModel, workerInitCmd ) =
+                    config.worker.init
 
+                initCmd =
+                    Cmd.map InternalWorkerMsg workerInitCmd
 
+                supervisorModel =
+                    fst config.supervisor.init
 
---( Uninitialized, Ok ( True, _, data ) ) ->
---    let
---        -- We've received a worker message; we must be a worker!
---        ( workerModel, initCmd ) =
---            config.worker.init
---        supervisorModel =
---            fst config.supervisor.init
---        ( newRole, newCmd ) =
---            jsonUpdate config json (Worker workerModel supervisorModel)
---    in
---        ( newRole, Cmd.batch [ initCmd, newCmd ] )
---( Supervisor workerModel supervisorModel, Ok ( False, Just workerId, data ) ) ->
---    let
---        -- We're a supervisor; process the message accordingly
---        ( newModel, cmd ) =
---            supervisorUpdate config workerModel supervisorModel (config.supervisor.decode workerId data)
---    in
---        ( Supervisor workerModel newModel, cmd )
---( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
---    Debug.crash "TODO"
-----let
-----    -- We're a worker; process the message accordingly
-----    ( newModel, cmd ) =
-----        workerUpdate config workerModel supervisorModel (config.worker.decode data)
-----in
-----    ( Worker newModel supervisorModel, sendToWorker config cmd )
---( Worker _ _, Ok ( True, Just _, data ) ) ->
---    Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
---( Worker _ _, Ok ( False, _, _ ) ) ->
---    Debug.crash "Received supervisor message while running as worker."
---( Supervisor _ _, Ok ( False, Nothing, _ ) ) ->
---    Debug.crash "Received supervisor message without a workerId."
---( Supervisor _ _, Ok ( True, _, _ ) ) ->
---    Debug.crash "Received worker message while running as supervisor."
+                ( newRole, newCmd ) =
+                    jsonUpdate config json (Worker workerModel supervisorModel)
+            in
+                ( newRole, Cmd.batch [ initCmd, newCmd ] )
+
+        ( Supervisor workerModel supervisorModel, Ok ( False, Just workerId, data ) ) ->
+            let
+                -- We're a supervisor; process the message accordingly
+                ( newRole, supervisorCmd ) =
+                    supervisorUpdate config workerModel supervisorModel (config.supervisor.decode workerId data)
+            in
+                ( newRole, Cmd.map InternalSupervisorMsg supervisorCmd )
+
+        ( Worker workerModel supervisorModel, Ok ( True, Nothing, data ) ) ->
+            let
+                -- We're a worker; process the message accordingly
+                ( newRole, workerCmd ) =
+                    workerUpdate config workerModel supervisorModel (config.worker.decode data)
+            in
+                ( newRole, Cmd.map InternalWorkerMsg workerCmd )
+
+        ( Worker _ _, Ok ( True, Just _, data ) ) ->
+            Debug.crash "Received workerId in a message intended for a worker. Worker messages should never include a workerId, as workers should never rely on knowing their own workerId values!"
+
+        ( Worker _ _, Ok ( False, _, _ ) ) ->
+            Debug.crash "Received supervisor message while running as worker."
+
+        ( Supervisor _ _, Ok ( False, Nothing, _ ) ) ->
+            Debug.crash "Received supervisor message without a workerId."
+
+        ( Supervisor _ _, Ok ( True, _, _ ) ) ->
+            Debug.crash "Received worker message while running as supervisor."
 
 
 update :
@@ -148,21 +159,19 @@ update :
 update config internalMsg role =
     case ( role, internalMsg ) of
         ( Worker workerModel supervisorModel, InternalWorkerMsg msg ) ->
-            Debug.crash "TODO"
+            let
+                ( newRole, workerMsg ) =
+                    workerUpdate config workerModel supervisorModel msg
+            in
+                ( newRole, Cmd.map InternalWorkerMsg workerMsg )
 
-        --let
-        --    ( newModel, workerMsg ) =
-        --        workerUpdate config workerModel supervisorModel msg
-        --in
-        --    ( newModel, sendToWorker config workerMsg )
         ( Supervisor workerModel supervisorModel, InternalSupervisorMsg msg ) ->
-            Debug.crash "TODO"
+            let
+                ( newRole, supervisorMsg ) =
+                    supervisorUpdate config workerModel supervisorModel msg
+            in
+                ( newRole, Cmd.map InternalSupervisorMsg supervisorMsg )
 
-        --let
-        --    ( newModel, supervisorMsg ) =
-        --        supervisorUpdate config workerModel supervisorModel msg
-        --in
-        --    ( newModel, sendToSupervisor config supervisorMsg )
         ( Worker workerModel supervisorModel, InternalSupervisorMsg msg ) ->
             Debug.crash ("Received an internal supervisor message as a worker!" ++ toString msg)
 
@@ -179,6 +188,7 @@ update config internalMsg role =
             jsonUpdate config json role
 
 
+{-| -}
 program : ParallelProgram workerModel workerMsg supervisorModel supervisorMsg -> Program Never
 program config =
     Html.App.program
