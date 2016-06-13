@@ -8,7 +8,6 @@ module Script exposing (ParallelProgram, program, WorkerCommands, SupervisorComm
 -- This is where the magic happens
 
 import Json.Decode as Decode exposing (Value, Decoder, (:=), decodeValue)
-import Json.Decode.Extra as Extra
 import Json.Encode as Encode
 import Html.App
 import Html exposing (Html)
@@ -121,7 +120,7 @@ messageDecoder : Decoder ( Bool, Maybe WorkerId, Value )
 messageDecoder =
     Decode.object3 (,,)
         ("forWorker" := Decode.bool)
-        ("workerId" := (Extra.maybeNull Decode.string))
+        ("workerId" := nullable Decode.string)
         ("data" := Decode.value)
 
 
@@ -315,3 +314,13 @@ wrapSubscriptions receive workerSubscriptions supervisorSubscriptions role =
 
             Uninitialized ->
                 receiveJson
+
+
+{-| Works just like http://package.elm-lang.org/packages/elm-community/json-extra/1.0.0/Json-Decode-Extra#maybeNull
+-}
+nullable : Decoder a -> Decoder (Maybe a)
+nullable decoder =
+    Decode.oneOf
+        [ Decode.null Nothing
+        , Decode.map Just decoder
+        ]
