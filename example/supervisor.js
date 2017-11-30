@@ -1,1 +1,1 @@
-/Users/rtfeldman/code/elm-web-workers/src/js/supervisor.js
+../src/js/supervisor.js
