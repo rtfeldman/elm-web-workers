@@ -1,1 +1,1 @@
-/Users/rtfeldman/code/elm-web-workers/src/js/worker.js
+../src/js/worker.js
